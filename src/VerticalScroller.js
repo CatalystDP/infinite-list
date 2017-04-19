@@ -69,7 +69,6 @@ var VerticalScroller = function (parentElement, callback) {
     }
 
     function bounce (top){
-
         var finalDestination = top ? minOffset : maxOffset,
             isBouncingBack = top && amplitude > 0 || !top && amplitude < 0;
 
@@ -202,10 +201,14 @@ var VerticalScroller = function (parentElement, callback) {
     }
 
     return {
+        changeScrollPosition:changeScrollPosition,
         setDimensions: setDimensions,
         scrollTo: scrollTo,
         isPressed: function(){
             return pressed;
+        },
+        getMaxOffset:function(){
+            return maxOffset;
         }
     }
 };

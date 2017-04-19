@@ -3,28 +3,28 @@ var VerticalScroller = require('./VerticalScroller'),
     AnimationFrameHelper = require('./AnimationFrameHelper'),
     ListItemsRenderer = require('./ListItemsRenderer'),
     StyleHelpers = require('./StyleHelpers');
-    DEFAULT_ITEM_HEIGHT = 2;
 
 var InfiniteList = function (listConfig) {
 
     var config = {
-            itemHeightGetter: null,
-            itemRenderer: null,
-            itemTypeGetter: null,
-            pageFetcher: null,
-            loadMoreRenderer: function(index, domElement){
-                domElement.innerHTML = '<div style="margin-left:14px;height:50px">Loading...</div>';
-            },
-            hasMore: false,
-            pullToRefresh: {
-                height: null,
-                idleRenderer: null,
-                busyRenderer: null,
-                beginRefreshAtOffset: null,
-                onRefresh: null
-            },
-            itemsCount: 0
+        itemHeightGetter: null,
+        itemRenderer: null,
+        itemTypeGetter: null,
+        pageFetcher: null,
+        loadMoreRenderer: function (index, domElement) {
+            domElement.innerHTML = '<div style="margin-left:14px;height:50px">Loading...</div>';
         },
+        hasMore: false,
+        pullToRefresh: {
+            height: null,
+            idleRenderer: null,
+            busyRenderer: null,
+            beginRefreshAtOffset: null,
+            onRefresh: null
+        },
+        itemsCount: 0
+    },
+        scrolling = false,//标志是否正在滚动
         parentElement = null,
         parentElementHeight,
         rootElement = null,
@@ -33,32 +33,32 @@ var InfiniteList = function (listConfig) {
         itemsRenderer = null,
         scroller = null,
         listItemsHeights = [],
+        lastTopOffset = 0,//记录上一次的滚动offset
         topOffset = 0,
         scrollToIndex = 0,
         topItemOffset = 0,
         needsRender = true,
         refreshing = false;
 
-    for (var key in listConfig){
-        if (listConfig.hasOwnProperty(key)){
+    for (var key in listConfig) {
+        if (listConfig.hasOwnProperty(key)) {
             config[key] = listConfig[key];
         }
     }
 
     var initialPageConfig = listConfig.initialPage;
-    if (initialPageConfig){
+    if (initialPageConfig) {
         config.itemsCount = initialPageConfig.itemsCount || 0;
         config.hasMore = initialPageConfig.hasMore || false;
     }
 
-    function attach(domElement, touchProvider){
+    function attach(domElement, touchProvider) {
         parentElement = domElement;
         initializeRootElement(domElement);
-        scrollbarRenderer = new ScrollbarRenderer(rootElement);
-        itemsRenderer = new ListItemsRenderer(domElement, scrollElement, config, loadMoreCallback, function(){
+        scrollbarRenderer = new ScrollbarRenderer(rootElement, config);
+        itemsRenderer = new ListItemsRenderer(domElement, scrollElement, config, loadMoreCallback, function () {
             refreshing = true;
-        }, function(){
-            console.error('done refreshing');
+        }, function () {
             refreshing = false;
 
             updateScroller(true);
@@ -66,7 +66,9 @@ var InfiniteList = function (listConfig) {
         scroller = new VerticalScroller(
             parentElement,
             function (top) {
+                scrolling = true;
                 topOffset = (top || 0);
+                typeof config.onScroll === 'function' && config.onScroll(topOffset);
                 needsRender = true;
             },
             touchProvider
@@ -89,8 +91,15 @@ var InfiniteList = function (listConfig) {
         window.removeEventListener('resize', refresh.bind(this));
     }
 
-    function runAnimationLoop(){
-        AnimationFrameHelper.startAnimationLoop(function(){
+    function runAnimationLoop() {
+        AnimationFrameHelper.startAnimationLoop(function () {
+            if (scrolling && !scroller.isPressed()) {
+                if (lastTopOffset == topOffset) {
+                    scrolling = false;
+                    typeof config.onScrollEnd == 'function' && config.onScrollEnd();
+                }
+                lastTopOffset = topOffset;
+            }
             if (needsRender) {
                 render();
             }
@@ -125,7 +134,7 @@ var InfiniteList = function (listConfig) {
             rootElement);
     };
 
-    function refresh(){
+    function refresh() {
         var topListItem = itemsRenderer.getRenderedItems()[0],
             topListItemIndex = topListItem && topListItem.getItemIndex() || 0,
             topItemStartsAt = topListItem && topListItem.getItemOffset() || 0,
@@ -146,16 +155,19 @@ var InfiniteList = function (listConfig) {
         var maxIndexToRender = config.itemsCount - 1 + (config.hasMore ? 1 : 0),
             renderedItems = itemsRenderer.getRenderedItems(),
             lastRenderedItem = renderedItems[renderedItems.length - 1],
-            minScrollerOffset =  Number.MIN_SAFE_INTEGER,
+            minScrollerOffset = Number.MIN_SAFE_INTEGER,
             maxScrollerOffset = Number.MAX_SAFE_INTEGER,
             pullToRefreshHeight = config.pullToRefresh.height;
 
         if (renderedItems.length > 0 && renderedItems[0].getItemIndex() == 0) {
-                minScrollerOffset = renderedItems[0].getItemOffset();
+            minScrollerOffset = renderedItems[0].getItemOffset();
         }
 
         if (lastRenderedItem && lastRenderedItem.getItemIndex() == maxIndexToRender) {
-                maxScrollerOffset =  lastRenderedItem.getItemOffset() + lastRenderedItem.getItemHeight() - parentElementHeight;
+            maxScrollerOffset = lastRenderedItem.getItemOffset() + lastRenderedItem.getItemHeight() - parentElementHeight;
+            if(maxScrollerOffset<0){
+                maxScrollerOffset=0;
+            }
         }
 
         minScrollerOffset = refreshing ? minScrollerOffset - pullToRefreshHeight : minScrollerOffset;
@@ -176,13 +188,13 @@ var InfiniteList = function (listConfig) {
         topItemOffset = null;
 
 
-        renderedItems.forEach(function(item){
+        renderedItems.forEach(function (item) {
             listItemsHeights[item.getItemIndex()] = item.getItemHeight();
         });
 
         var avarageItemHeight = 0,
             itemsCount = 0;
-        for (var i=0; i<listItemsHeights.length; ++i) {
+        for (var i = 0; i < listItemsHeights.length; ++i) {
             if (typeof listItemsHeights[i] == 'number') {
 
                 avarageItemHeight += listItemsHeights[i];
@@ -193,8 +205,8 @@ var InfiniteList = function (listConfig) {
         scrollbarRenderer.render(avarageItemHeight * renderedItems[0].getItemIndex() + topOffset - renderedItems[0].getItemOffset(), avarageItemHeight * config.itemsCount);
     }
 
-    function loadMoreCallback(){
-        config.pageFetcher(config.itemsCount, function(pageItemsCount, hasMore){
+    function loadMoreCallback() {
+        config.pageFetcher(config.itemsCount, function (pageItemsCount, hasMore) {
             config.hasMore = hasMore;
             config.itemsCount += pageItemsCount;
             calculateHeights(config.itemsCount - pageItemsCount);
@@ -205,20 +217,20 @@ var InfiniteList = function (listConfig) {
     function scrollToItem(index, animate, relativeOffset) {
         var targetPosition = 0;
         if (config.itemHeightGetter) {
-            for (var i=0; i<index; ++i){
+            for (var i = 0; i < index; ++i) {
                 targetPosition += config.itemHeightGetter(i);
             }
         } else {
             scrollToIndex = index;
         }
         topItemOffset = relativeOffset || 0;
-        scroller.scrollTo( targetPosition, config.itemHeightGetter && animate);
+        scroller.scrollTo(targetPosition, config.itemHeightGetter && animate);
     }
 
-    function refreshItemHeight(index){
+    function refreshItemHeight(index) {
 
         var renderedItems = itemsRenderer.getRenderedItems();
-        var renderedListItem = renderedItems.filter(function(rItem){
+        var renderedListItem = renderedItems.filter(function (rItem) {
             return rItem.getItemIndex() == index;
         })[0];
 
@@ -236,13 +248,13 @@ var InfiniteList = function (listConfig) {
             var itemRenderIndex = renderedListItem.getItemIndex() - renderedItems[0].getItemIndex();
             var nextItem = renderedItems[itemRenderIndex + 1];
             if (renderedListItem.getItemOffset() < topOffset) {
-                while (nextItem && renderedListItem){
+                while (nextItem && renderedListItem) {
                     renderedListItem.setItemOffset(nextItem.getItemOffset() - renderedListItem.getItemHeight());
                     nextItem = renderedListItem;
                     renderedListItem = renderedItems[--itemRenderIndex];
                 }
             } else {
-                while (nextItem && renderedListItem){
+                while (nextItem && renderedListItem) {
                     nextItem.setItemOffset(renderedListItem.getItemOffset() + renderedListItem.getItemHeight());
                     renderedListItem = nextItem;
                     nextItem = renderedItems[++itemRenderIndex + 1];
@@ -252,11 +264,28 @@ var InfiniteList = function (listConfig) {
     }
 
     return {
+        setConfig: function (key, value) {
+            if (config.hasOwnProperty(key)) {
+                config[key] = value;
+            }
+        },
+        getMaxTopOffset: function () {
+            return scroller.getMaxOffset();
+        },
+        getTopOffset: function () {
+            return topOffset;
+        },
+        scrollTo: function (y) {
+            scroller.changeScrollPosition(y);
+        },
         attach: attach,
         detach: detach,
         scrollToItem: scrollToItem,
         refresh: refresh,
-        refreshItemHeight: refreshItemHeight
+        refreshItemHeight: refreshItemHeight,
+        isScrolling: function () {
+            return scrolling;
+        }
     }
 
 };

@@ -5,7 +5,7 @@ var Layer = require('./Layer'),
     MIN_FPS = 30,
     MAX_TIME_PER_FRAME = 1000 / MIN_FPS;
 
-var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pageCallback, onRefreshStarted, onRefreshCompleted){
+var ListItemsRenderer = function (attachedElement, scrollElement, listConfig, pageCallback, onRefreshStarted, onRefreshCompleted) {
 
     var visibleHeight = attachedElement.clientHeight,
         itemWidth = attachedElement.clientWidth,
@@ -17,10 +17,10 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
 
     listConfig.pullToRefresh && renderPullToRefresh();
 
-    function render(topOffset, atIndex, offsetFromTop, isDragging){
+    function render(topOffset, atIndex, offsetFromTop, isDragging) {
         var startRenderTime = new Date().getTime();
 
-        if ( typeof atIndex == 'number' &&  atIndex >= 0){
+        if (typeof atIndex == 'number' && atIndex >= 0) {
             while (renderedListItems.length > 0) {
                 layersPool.addLayer(renderedListItems.pop());
             }
@@ -34,7 +34,7 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
         var topRenderedItem = renderedListItems[0],
             bottomRenderedItem = renderedListItems[renderedListItems.length - 1];
 
-        while (topRenderedItem && topRenderedItem.getItemOffset() > topOffset && topRenderedItem.getItemIndex() > 0){
+        while (topRenderedItem && topRenderedItem.getItemOffset() > topOffset && topRenderedItem.getItemIndex() > 0) {
             topRenderedItem = renderBefore(topRenderedItem);
             if (new Date().getTime() - startRenderTime > MAX_TIME_PER_FRAME) {
                 return true;
@@ -76,7 +76,7 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
         return false;
     }
 
-    function renderBefore(listItem){
+    function renderBefore(listItem) {
         var newItem = renderListItem(listItem.getItemIndex() - 1);
         if (newItem) {
             newItem.setItemOffset(listItem.getItemOffset() - newItem.getItemHeight());
@@ -85,7 +85,7 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
         return newItem;
     }
 
-    function renderAfter(listItem){
+    function renderAfter(listItem) {
         var newItem = renderListItem(listItem.getItemIndex() + 1);
         if (newItem) {
             newItem.setItemOffset(listItem.getItemOffset() + listItem.getItemHeight());
@@ -94,7 +94,7 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
         return newItem;
     }
 
-    function renderListItem (index) {
+    function renderListItem(index) {
         if (index == listConfig.itemsCount) {
             if (!listConfig.hasMore) {
                 return null;
@@ -116,6 +116,7 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
                 height = pullToRefresh.height,
                 idleRenderer = pullToRefresh.idleRenderer,
                 busyRenderer = pullToRefresh.busyRenderer,
+                onBeforeRefresh=pullToRefresh.onBeforeRefresh,
                 beginRefreshAtOffset = pullToRefresh.beginRefreshAtOffset,
                 onRefresh = pullToRefresh.onRefresh;
 
@@ -136,9 +137,10 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
 
                 if (!refreshing && diff >= (beginRefreshAtOffset || height) && !isDragging && prepareToRefresh) {
                     refreshing = true;
-                    // busyRenderer(pullToRefreshItem.getDomElement());
+                    typeof onBeforeRefresh ==='function' && onBeforeRefresh();
+                    busyRenderer(pullToRefreshItem.getDomElement());
                     onRefreshStarted(height);
-                    onRefresh(function(){
+                    onRefresh(function () {
                         refreshing = false;
                         //idleRenderer(pullToRefreshItem.getDomElement());
                         onRefreshCompleted();
@@ -184,30 +186,35 @@ var ListItemsRenderer = function(attachedElement, scrollElement, listConfig, pag
         //listItems.push(layer);
         return layer;
     }
-
-    function renderLoadMore(){
+    /**
+     * 
+     * @param {*} noTriggerLoad 默认会触发加载
+     */
+    function renderLoadMore(noTriggerLoad) {
         if (renderedListItems.length == 0 || renderedListItems[renderedListItems.length - 1].getIdentifier() != '$LoadMore') {
             var loadMoreLayer = borrowLayerForIndex(listConfig.itemsCount, '$LoadMore');
             listConfig.loadMoreRenderer(listConfig.itemsCount, loadMoreLayer.getDomElement());
-            pageCallback();
+            if (!noTriggerLoad) {
+                pageCallback();
+            }
             return loadMoreLayer;
         }
 
         return renderedListItems[renderedListItems.length - 1];
     }
 
-    function refresh(){
+    function refresh() {
         visibleHeight = attachedElement.clientHeight;
         itemWidth = attachedElement.clientWidth;
-        renderedListItems.forEach(function(layer){
+        renderedListItems.forEach(function (layer) {
             layersPool.addLayer(layer, true)
         });
         renderedListItems = [];
     }
 
-   function getRenderedItems(){
-       return renderedListItems;
-   }
+    function getRenderedItems() {
+        return renderedListItems;
+    }
 
     return {
         render: render,

@@ -1,6 +1,7 @@
 var StyleHelpers = require('./StyleHelpers');
 
-var ScrollbarRenderer = function(rootElement){
+var ScrollbarRenderer = function(rootElement,configs){
+    configs=configs||{};
     var scrollbar = document.createElement('div'),
         clientHeight = rootElement.parentElement.clientHeight;
 
@@ -13,6 +14,11 @@ var ScrollbarRenderer = function(rootElement){
         width: '5px',
         backgroundColor: "#333"
     });
+    if(configs.hideScrollBar){
+        StyleHelpers.applyElementStyle(scrollbar,{
+            display:'none'
+        });
+    }
     rootElement.appendChild(scrollbar);
 
     function render(topOffset, listHeight){
